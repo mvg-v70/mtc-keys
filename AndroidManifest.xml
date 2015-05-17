@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.mvgv70.mtc_keys"
+    android:versionCode="11"
+    android:versionName="1.1" >
+
+    <uses-sdk
+        android:minSdkVersion="17"
+        android:targetSdkVersion="21" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:theme="@style/AppTheme" >
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true" />
+        <meta-data
+            android:name="xposedminversion"
+            android:value="30" />
+        <meta-data
+            android:name="xposeddescription"
+            android:value="Переназначение клавиш на лицевой панели microntek-магниотол" />
+    </application>
+
+</manifest>
