@@ -3,8 +3,7 @@ package com.mvgv70.mtc_keys;
 import static de.robv.android.xposed.XposedHelpers.findAndHookMethod;
 
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
+import java.util.List;
 import java.util.Properties;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -19,7 +18,6 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.app.Service;
 import android.app.ActivityManager;
-import android.util.SparseArray;
 
 public class Microntek implements IXposedHookLoadPackage 
 {
@@ -29,7 +27,8 @@ public class Microntek implements IXposedHookLoadPackage
   private static Service mtcService;
   private static Properties props = null;
   private static ActivityManager am;
-  SparseArray<String> appMap = new SparseArray<String>();
+  private static String topActivity;
+  private static String nextActivity;
   private final static String INI_FILE_NAME = Environment.getExternalStorageDirectory().getPath()+"/mtc-keys/mtc-keys.ini"; 
   private final static String TAG = "mtc-keys";
   
@@ -72,8 +71,8 @@ public class Microntek implements IXposedHookLoadPackage
       	  props.load(new FileInputStream(INI_FILE_NAME));
       	  Log.d(TAG,"ini file loaded, line count="+props.size());
       	} catch (Exception e) {
-			Log.e(TAG,e.getMessage());
-		}
+          Log.e(TAG,e.getMessage());
+        }
       }
     };
     
@@ -112,25 +111,15 @@ public class Microntek implements IXposedHookLoadPackage
     
     private void RunApp(Context context, String appName, int keyCode)
     {
-      String runApp;
-      String topApp = getTopActivityPackageName();
-      if (topApp.equals(appName))
-      {
-    	// возвращаем приложение из которого было запущено
-        runApp = appMap.get(keyCode);
-      }
-      else
-      {
-    	// сохраняем текущее приложение
-    	appMap.put(keyCode, topApp);
-    	runApp = appName;
-      }
+      String runApp = appName;
+      getActivityList();
+      if (appName.equals(topActivity))
+        // запускаем предыдущее приложение в списке
+        runApp = nextActivity;
       Log.d(TAG,"run app="+runApp);
       Intent appIntent = context.getPackageManager().getLaunchIntentForPackage(runApp);
       if (appIntent != null)
-      {
         context.startActivity(appIntent);
-      }
       else
       {
         Log.w(TAG,"no activity found for "+runApp);
@@ -138,12 +127,17 @@ public class Microntek implements IXposedHookLoadPackage
       }
     }
     
-    private String getTopActivityPackageName()
+    private void getActivityList()
     {
-      try {
-        return  ((ActivityManager.RunningTaskInfo)am.getRunningTasks(1).get(0)).topActivity.getPackageName();
-      } catch (Exception localException) {}
-      return null;
+      try 
+      {
+    	List<ActivityManager.RunningTaskInfo> taskList = am.getRunningTasks(2);
+    	topActivity = taskList.get(0).topActivity.getPackageName();
+    	if (taskList.size() > 1)
+    	  nextActivity = taskList.get(1).baseActivity.getPackageName();
+    	else
+    	  nextActivity = "";
+      } catch (Exception e) {}
     }
     
     private void goLauncher(Context context)
