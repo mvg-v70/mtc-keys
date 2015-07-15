@@ -1,7 +1,6 @@
 package com.mvgv70.mtc_keys;
 
-import static de.robv.android.xposed.XposedHelpers.findAndHookMethod;
-
+import java.io.File;
 import java.io.FileInputStream;
 import java.util.List;
 import java.util.Properties;
@@ -10,6 +9,7 @@ import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
+import android.os.Build;
 import android.os.Environment;
 import android.util.Log;
 import android.content.BroadcastReceiver;
@@ -35,11 +35,12 @@ public class Microntek implements IXposedHookLoadPackage
   @Override
   public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable 
   {
-    // MTCManager.onCreate
-    XC_MethodHook onCreateManager = new XC_MethodHook() {
+    // MTCManager.onCreate()
+    XC_MethodHook onCreate = new XC_MethodHook() {
 	           
       @Override
       protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+    	Log.d(TAG,"onCreate");
       	mContext = (Context)XposedHelpers.getObjectField(param.thisObject, "mContext");
       	am = (ActivityManager)mContext.getSystemService(Context.ACTIVITY_SERVICE);
       	mtcService = ((Service)param.thisObject);
@@ -61,9 +62,22 @@ public class Microntek implements IXposedHookLoadPackage
       	  IntentFilter ki = new IntentFilter();
       	  ki.addAction("com.microntek.irkeyDown");
       	  mtcService.registerReceiver(keyServiceReceiver, ki);
+      	  // ресивер обработки изменения громкости звука от скорости
+      	  Log.d(TAG,"Build.VERSION.SDK_INT="+Build.VERSION.SDK_INT);
+      	  if (Build.VERSION.SDK_INT > 17)
+      	  {
+      		// для версий 4.4
+      		IntentFilter vi = new IntentFilter();
+        	vi.addAction("com.microntek.VOLUME_CHANGED");
+        	mtcService.registerReceiver(volumeReceiver, vi);
+        	Log.d(TAG,"Manager. volume receiver created");
+      	  }
       	  //
-      	  Log.d(TAG,"Manager.Receiver changed");
+      	  Log.d(TAG,"Manager.Receivers changed");
       	}
+      	File f = new File(INI_FILE_NAME);
+      	Log.d(TAG,"file exist "+f.exists());
+      	// чтение настроечного файла
       	try
       	{
       	  Log.d(TAG,"inifile load from "+INI_FILE_NAME);
@@ -76,13 +90,14 @@ public class Microntek implements IXposedHookLoadPackage
       }
     };
     
+    // start hooks
     if (!lpparam.packageName.equals("android.microntek.service")) return;
     Log.d(TAG,"package android.microntek.service");
-    findAndHookMethod("android.microntek.service.MicrontekServer", lpparam.classLoader, "onCreate", onCreateManager);
+    XposedHelpers.findAndHookMethod("android.microntek.service.MicrontekServer", lpparam.classLoader, "onCreate", onCreate);
     Log.d(TAG,"com.microntek.service hook OK");
   }
   
-  // общий обработкчик остальных событий: dvdClosed, startApp, light
+  // общий обработчик остальных событий: dvdClosed, startApp, light
   private BroadcastReceiver otherReceiver = new BroadcastReceiver()
   {
     public void onReceive(Context context, Intent intent)
@@ -100,16 +115,27 @@ public class Microntek implements IXposedHookLoadPackage
     {
       int keyCode = intent.getIntExtra("keyCode", -1);
       Log.d(TAG,"keyCode="+keyCode);
-      String mapApp = props.getProperty("app_"+keyCode, "");
-      if (mapApp.isEmpty())
+      // app = приложение, action = {back,home,tasks,apps,menu} 
+      String app = props.getProperty("app_"+keyCode, "").trim();
+      String action = props.getProperty("action_"+keyCode, "").trim();
+      if (!app.isEmpty())
+    	// запуск приложения app
+      	runApp(context, app);
+      else if (!action.isEmpty())
+      {
+    	// TODO: обработка action: back, home, menu, task
+    	if (action.equals("home"))
+    	  goLauncher(context);
+    	else
+    	  // пока не реализованио
+    	  Log.w(TAG,"acction "+action);
+      }
+      else
         // выполним обработчик по-умолчанию
         mtcReceiver.onReceive(context, intent);
-      else
-        // запуск приложения mapApp
-    	RunApp(context, mapApp, keyCode);
     }
     
-    private void RunApp(Context context, String appName, int keyCode)
+    private void runApp(Context context, String appName)
     {
       String runApp = appName;
       getActivityList();
@@ -119,7 +145,10 @@ public class Microntek implements IXposedHookLoadPackage
       Log.d(TAG,"run app="+runApp);
       Intent appIntent = context.getPackageManager().getLaunchIntentForPackage(runApp);
       if (appIntent != null)
+      {
+    	appIntent.addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         context.startActivity(appIntent);
+      }
       else
       {
         Log.w(TAG,"no activity found for "+runApp);
@@ -144,7 +173,20 @@ public class Microntek implements IXposedHookLoadPackage
     {
       XposedHelpers.callMethod(mtcService, "startHome", new Object[] {});
     }
-    
+        
+  };
+  
+  // установим внутреннюю переменную с величиной громкости по интенту com.microntek.VOLUME_CHANGED
+  private BroadcastReceiver volumeReceiver = new BroadcastReceiver()
+  {
+    public void onReceive(Context context, Intent intent)
+    {
+      int mCurVolume = XposedHelpers.getIntField(mtcService,"mCurVolume");
+      int mNewVolume = intent.getIntExtra("volume", mCurVolume);
+      if (mNewVolume > 0) 
+        XposedHelpers.setIntField(mtcService,"mCurVolume",mNewVolume);
+    }
   };
   
 };
+
