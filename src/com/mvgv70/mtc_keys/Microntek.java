@@ -13,9 +13,12 @@ import android.os.Build;
 import android.os.Environment;
 import android.util.Log;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
+import android.content.pm.PackageManager.NameNotFoundException;
 import android.app.Service;
 import android.app.ActivityManager;
 
@@ -115,26 +118,29 @@ public class Microntek implements IXposedHookLoadPackage
     {
       int keyCode = intent.getIntExtra("keyCode", -1);
       Log.d(TAG,"keyCode="+keyCode);
-      // app = приложение, action = {back,home,tasks,apps,menu} 
+      // app = приложение, action = {back,home,tasks,apps,menu}, activity, intent
       String app = props.getProperty("app_"+keyCode, "").trim();
       String action = props.getProperty("action_"+keyCode, "").trim();
+      String activity = props.getProperty("activity_"+keyCode, "").trim();
+      String intentName = props.getProperty("intent_"+keyCode, "").trim();
       if (!app.isEmpty())
-    	// запуск приложения app
+    	// запуск приложения 
       	runApp(context, app);
+      else if (!activity.isEmpty())
+      	// запуск activity
+        runActivity(context, activity);
       else if (!action.isEmpty())
-      {
-    	// TODO: обработка action: back, home, menu, task
-    	if (action.equals("home"))
-    	  goLauncher(context);
-    	else
-    	  // пока не реализованио
-    	  Log.w(TAG,"acction "+action);
-      }
+        // действие
+    	runAction(context, action);
+      else if (!intentName.isEmpty())
+        // интент
+      	sendIntent(context, intentName);
       else
-        // выполним обработчик по-умолчанию
+        // выполним обработчик по-умолчанию, если на клавишу ничего не назначено
         mtcReceiver.onReceive(context, intent);
     }
     
+    // запуск приложения
     private void runApp(Context context, String appName)
     {
       String runApp = appName;
@@ -154,6 +160,60 @@ public class Microntek implements IXposedHookLoadPackage
         Log.w(TAG,"no activity found for "+runApp);
         goLauncher(context);
       }
+    }
+    
+    // запуск activity
+    private void runActivity(Context context, String activity)
+    {
+      int i = activity.indexOf("/");
+      if (i > 0)
+      {
+        String packageName = activity.substring(0,i);
+        String className = activity.substring(i+1);
+        Log.d(TAG,"start activity "+packageName+"/"+className);
+        // по-другому приводит к перезагрузке
+        Intent appIntent = context.getPackageManager().getLaunchIntentForPackage(packageName);
+        if (appIntent != null)
+        {
+          ComponentName cn = new ComponentName(packageName, className);
+          try 
+          {
+            context.getPackageManager().getActivityInfo(cn, PackageManager.GET_META_DATA);
+            appIntent.setComponent(cn);
+            appIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+            appIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            Log.d(TAG,appIntent.toString());
+            context.startActivity(appIntent);
+          } 
+          catch (NameNotFoundException e) 
+          {
+            Log.w(TAG,"activity "+className+" not found");
+            goLauncher(context);
+          }
+        }
+        else
+        {
+          Log.w(TAG,"no activity found for package "+packageName);
+          goLauncher(context);
+        }
+      }
+      else
+        Log.w(TAG,"wrong format for activity: "+activity);
+    }
+    
+    // send intent
+    private void sendIntent(Context context, String intentName)
+    {
+      Log.d(TAG,"intent "+intentName);
+      context.sendBroadcast(new Intent(intentName));
+    }
+    
+    // обработка action: back, home, menu, apps
+    private void runAction(Context context, String action)
+    {
+      Intent intent = new Intent(SystemUI.KEYS_ACTION);
+      intent.putExtra("action", action);
+      context.sendBroadcast(intent);
     }
     
     private void getActivityList()

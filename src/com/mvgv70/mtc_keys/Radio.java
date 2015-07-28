@@ -7,6 +7,7 @@ import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
+import android.os.Bundle;
 import android.os.Environment;
 import android.util.Log;
 import android.content.BroadcastReceiver;
@@ -32,7 +33,7 @@ public class Radio implements IXposedHookLoadPackage
 	           
       @Override
       protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-    	Log.d(TAG,"onCreete");
+    	Log.d(TAG,"onCreate");
       	mtcRadio = ((Activity)param.thisObject);
       	radioReceiver = (BroadcastReceiver)XposedHelpers.getObjectField(param.thisObject, "mtckeyproc");
       	if (radioReceiver != null)
@@ -50,12 +51,13 @@ public class Radio implements IXposedHookLoadPackage
       	  //
       	  Log.d(TAG,"Radio.Receiver changed");
       	}
+      	// настройка кнопок
       	try
       	{
       	  props = new Properties();
       	  props.load(new FileInputStream(INI_FILE_NAME));
       	} catch (Exception e) {
-			Log.e(TAG,e.getMessage());
+		  Log.e(TAG,e.getMessage());
 		}
       }
     };
@@ -73,7 +75,7 @@ public class Radio implements IXposedHookLoadPackage
 	// start hooks  
     if (!lpparam.packageName.equals("com.microntek.radio")) return;
     Log.d(TAG,"package com.microntek.radio");
-    XposedHelpers.findAndHookMethod("com.microntek.radio.RadioActivity", lpparam.classLoader, "onCreate", "android.os.Bundle", onCreate);
+    XposedHelpers.findAndHookMethod("com.microntek.radio.RadioActivity", lpparam.classLoader, "onCreate", Bundle.class, onCreate);
     XposedHelpers.findAndHookMethod("com.microntek.radio.RadioActivity", lpparam.classLoader, "onDestroy", onDestroy);
     Log.d(TAG,"com.microntek.radio hook OK");
   }
@@ -85,9 +87,12 @@ public class Radio implements IXposedHookLoadPackage
     public void onReceive(Context context, Intent intent)
     {
       int keyCode = intent.getIntExtra("keyCode", -1);
-      String mapApp = props.getProperty("app_"+keyCode, "").trim();
-      if (mapApp.isEmpty())
-        // выполним обработчик по-умолчанию если не задано действие на клавишу
+      String app = props.getProperty("app_"+keyCode, "").trim();
+      String action = props.getProperty("action_"+keyCode, "").trim();
+      String activity = props.getProperty("activity_"+keyCode, "").trim();
+      String intentName = props.getProperty("intent_"+keyCode, "").trim();
+      if (app.isEmpty() && action.isEmpty() && activity.isEmpty() && intentName.isEmpty())
+        // выполним обработчик по-умолчанию если не заданы никакие действия на клавишу
         radioReceiver.onReceive(context, intent);
     }
   };
