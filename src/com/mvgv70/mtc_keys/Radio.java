@@ -8,7 +8,6 @@ import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 import android.os.Bundle;
-import android.os.Environment;
 import android.util.Log;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -22,7 +21,6 @@ public class Radio implements IXposedHookLoadPackage
   private static BroadcastReceiver radioReceiver;
   private static Activity mtcRadio;
   private static Properties props = null;
-  private final static String INI_FILE_NAME = Environment.getExternalStorageDirectory().getPath()+"/mtc-keys/mtc-keys.ini"; 
   private final static String TAG = "mtc-keys";
   
   @Override
@@ -54,8 +52,9 @@ public class Radio implements IXposedHookLoadPackage
       	// настройка кнопок
       	try
       	{
+      	  String iniFileName = Microntek.getIniFileName();
       	  props = new Properties();
-      	  props.load(new FileInputStream(INI_FILE_NAME));
+      	  props.load(new FileInputStream(iniFileName));
       	} catch (Exception e) {
 		  Log.e(TAG,e.getMessage());
 		}

@@ -32,8 +32,18 @@ public class Microntek implements IXposedHookLoadPackage
   private static ActivityManager am;
   private static String topActivity;
   private static String nextActivity;
-  private final static String INI_FILE_NAME = Environment.getExternalStorageDirectory().getPath()+"/mtc-keys/mtc-keys.ini"; 
   private final static String TAG = "mtc-keys";
+  
+  // имя настроечного файла
+  public static String getIniFileName()
+  {
+	String fileName = Environment.getExternalStorageDirectory().getPath()+"/mtc-keys/mtc-keys.ini";
+	File f = new File(fileName);
+	if (!f.exists())
+      // ищем настроечный файл на внешней карте, если нет на внутренней
+	  fileName = "/mnt/external_sd/mtc-keys/mtc-keys.ini";
+	return fileName;
+  }
   
   @Override
   public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable 
@@ -78,14 +88,14 @@ public class Microntek implements IXposedHookLoadPackage
       	  //
       	  Log.d(TAG,"Manager.Receivers changed");
       	}
-      	File f = new File(INI_FILE_NAME);
-      	Log.d(TAG,"file exist "+f.exists());
       	// чтение настроечного файла
       	try
       	{
-      	  Log.d(TAG,"inifile load from "+INI_FILE_NAME);
+      	  String iniFileName = getIniFileName();
+      	  Log.d(TAG,"inifile load from "+iniFileName);
+      	  //
       	  props = new Properties();
-      	  props.load(new FileInputStream(INI_FILE_NAME));
+      	  props.load(new FileInputStream(iniFileName));
       	  Log.d(TAG,"ini file loaded, line count="+props.size());
       	} catch (Exception e) {
           Log.e(TAG,e.getMessage());
