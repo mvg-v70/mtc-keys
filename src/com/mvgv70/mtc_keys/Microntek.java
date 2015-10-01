@@ -32,19 +32,10 @@ public class Microntek implements IXposedHookLoadPackage
   private static ActivityManager am;
   private static String topActivity;
   private static String nextActivity;
+  private static String iniFileName;
+  private static boolean inifileLoaded = false;
   private final static String TAG = "mtc-keys";
-  
-  // имя настроечного файла
-  public static String getIniFileName()
-  {
-	String fileName = Environment.getExternalStorageDirectory().getPath()+"/mtc-keys/mtc-keys.ini";
-	File f = new File(fileName);
-	if (!f.exists())
-      // ищем настроечный файл на внешней карте, если нет на внутренней
-	  fileName = "/mnt/external_sd/mtc-keys/mtc-keys.ini";
-	return fileName;
-  }
-  
+    
   @Override
   public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable 
   {
@@ -57,6 +48,13 @@ public class Microntek implements IXposedHookLoadPackage
       	mContext = (Context)XposedHelpers.getObjectField(param.thisObject, "mContext");
       	am = (ActivityManager)mContext.getSystemService(Context.ACTIVITY_SERVICE);
       	mtcService = ((Service)param.thisObject);
+        // показать версию модуля
+        try 
+        {
+     	  Context context = mtcService.createPackageContext(getClass().getPackage().getName(), Context.CONTEXT_IGNORE_SECURITY);
+     	  String version = context.getString(R.string.app_version_name);
+          Log.d(TAG,"version="+version);
+     	} catch (NameNotFoundException e) {}
       	mtcReceiver = (BroadcastReceiver)XposedHelpers.getObjectField(param.thisObject, "CarkeyProc");
       	if (mtcReceiver != null)
       	{
@@ -66,16 +64,23 @@ public class Microntek implements IXposedHookLoadPackage
       	  IntentFilter ni = new IntentFilter();
       	  mtcService.registerReceiver(mtcReceiver, ni);  
           // изменяем список интентов, кроме интентов кнопок
-    	  IntentFilter mi = new IntentFilter();
-          mi.addAction("com.microntek.dvdClosed");
-          mi.addAction("com.microntek.startApp");
-          mi.addAction("com.microntek.light");
-          mtcService.registerReceiver(otherReceiver, mi);
+    	  IntentFilter oi = new IntentFilter();
+          oi.addAction("com.microntek.dvdClosed");
+          oi.addAction("com.microntek.startApp");
+          oi.addAction("com.microntek.light");
+          mtcService.registerReceiver(otherReceiver, oi);
       	  // включаем receiver по обработке кнопок
       	  IntentFilter ki = new IntentFilter();
       	  ki.addAction("com.microntek.irkeyDown");
       	  mtcService.registerReceiver(keyServiceReceiver, ki);
-      	  // ресивер обработки изменения громкости звука от скорости
+      	  Log.d(TAG,"Manager.Receivers changed");
+          // ресивер подключения дисков
+          IntentFilter mi = new IntentFilter();
+          mi.addAction(Intent.ACTION_MEDIA_MOUNTED);
+          mi.addDataScheme("file");
+          mtcService.registerReceiver(mediaReceiver, mi);
+          Log.d(TAG,"Manager. media receiver created");
+          // ресивер обработки изменения громкости звука от скорости
       	  Log.d(TAG,"Build.VERSION.SDK_INT="+Build.VERSION.SDK_INT);
       	  if (Build.VERSION.SDK_INT > 17)
       	  {
@@ -85,21 +90,10 @@ public class Microntek implements IXposedHookLoadPackage
         	mtcService.registerReceiver(volumeReceiver, vi);
         	Log.d(TAG,"Manager. volume receiver created");
       	  }
-      	  //
-      	  Log.d(TAG,"Manager.Receivers changed");
       	}
       	// чтение настроечного файла
-      	try
-      	{
-      	  String iniFileName = getIniFileName();
-      	  Log.d(TAG,"inifile load from "+iniFileName);
-      	  //
-      	  props = new Properties();
-      	  props.load(new FileInputStream(iniFileName));
-      	  Log.d(TAG,"ini file loaded, line count="+props.size());
-      	} catch (Exception e) {
-          Log.e(TAG,e.getMessage());
-        }
+      	iniFileName = getIniFileName();
+      	readSettings();
       }
     };
     
@@ -109,6 +103,36 @@ public class Microntek implements IXposedHookLoadPackage
     XposedHelpers.findAndHookMethod("android.microntek.service.MicrontekServer", lpparam.classLoader, "onCreate", onCreate);
     Log.d(TAG,"com.microntek.service hook OK");
   }
+  
+  // имя настроечного файла
+  public static String getIniFileName()
+  {
+	String fileName = Environment.getExternalStorageDirectory().getPath()+"/mtc-keys/mtc-keys.ini";
+	File f = new File(fileName);
+	if (!f.exists())
+      // ищем настроечный файл на внешней карте, если нет на внутренней
+	  fileName = "/mnt/external_sd/mtc-keys/mtc-keys.ini";
+	return fileName;
+  }
+  
+  // чтение настроечного файла
+  private void readSettings()
+  {
+	try
+	{
+	  Log.d(TAG,"inifile load from "+iniFileName);
+	  //
+	  props = new Properties();
+	  props.load(new FileInputStream(iniFileName));
+	  Log.d(TAG,"ini file loaded, line count="+props.size());
+	  inifileLoaded = true;
+	} 
+	catch (Exception e) 
+	{
+      Log.e(TAG,e.getMessage());
+	}
+  }
+
   
   // общий обработчик остальных событий: dvdClosed, startApp, light
   private BroadcastReceiver otherReceiver = new BroadcastReceiver()
@@ -133,6 +157,7 @@ public class Microntek implements IXposedHookLoadPackage
       String action = props.getProperty("action_"+keyCode, "").trim();
       String activity = props.getProperty("activity_"+keyCode, "").trim();
       String intentName = props.getProperty("intent_"+keyCode, "").trim();
+      String event = props.getProperty("event_"+keyCode, "").trim();
       if (!app.isEmpty())
     	// запуск приложения 
       	runApp(context, app);
@@ -145,6 +170,9 @@ public class Microntek implements IXposedHookLoadPackage
       else if (!intentName.isEmpty())
         // интент
       	sendIntent(context, intentName);
+      else if (!event.isEmpty())
+        // переопределение кнопки
+        buttonPress(context, intent, event);
       else
         // выполним обработчик по-умолчанию, если на клавишу ничего не назначено
         mtcReceiver.onReceive(context, intent);
@@ -239,6 +267,25 @@ public class Microntek implements IXposedHookLoadPackage
       } catch (Exception e) {}
     }
     
+    // переопределение кнопки
+    public void buttonPress(Context context, Intent intent, String event)
+    {
+      int keyCode;
+      try
+      {
+        keyCode = Integer.parseInt(event);
+        // изменим значение кода клавиши в интенте
+        intent.putExtra("keyCode", keyCode);
+        // выполним обработчик по-умолчанию
+        Log.d(TAG,"emulate event "+keyCode);
+        mtcReceiver.onReceive(context, intent);
+      }
+      catch (Exception e)
+      {
+        Log.d(TAG,"invalid event "+event);
+      }
+    }
+    
     private void goLauncher(Context context)
     {
       XposedHelpers.callMethod(mtcService, "startHome", new Object[] {});
@@ -246,6 +293,22 @@ public class Microntek implements IXposedHookLoadPackage
         
   };
   
+  // подключение дисков
+  private BroadcastReceiver mediaReceiver = new BroadcastReceiver()
+  {
+    public void onReceive(Context context, Intent intent)
+    {
+      String drivePath = intent.getData().getPath();
+      Log.d(TAG,"ACTION_MEDIA_MOUNTED: "+drivePath);
+      // если ini-файл не загружен
+      if (!inifileLoaded)
+        // если подключилиск на котором находится настроечный файл
+        if (iniFileName.startsWith(drivePath))
+          readSettings();
+    }
+  };
+
+  // дополнительно для mtc-service
   // установим внутреннюю переменную с величиной громкости по интенту com.microntek.VOLUME_CHANGED
   private BroadcastReceiver volumeReceiver = new BroadcastReceiver()
   {
@@ -257,6 +320,7 @@ public class Microntek implements IXposedHookLoadPackage
         XposedHelpers.setIntField(mtcService,"mCurVolume",mNewVolume);
     }
   };
-  
+
+
 };
 
