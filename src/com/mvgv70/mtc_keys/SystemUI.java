@@ -1,23 +1,20 @@
 package com.mvgv70.mtc_keys;
 
-import de.robv.android.xposed.IXposedHookInitPackageResources;
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
-import de.robv.android.xposed.callbacks.XC_InitPackageResources;
-import de.robv.android.xposed.callbacks.XC_LayoutInflated;
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.os.Build;
+import android.media.AudioManager;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 
-public class SystemUI implements IXposedHookLoadPackage, IXposedHookInitPackageResources
+public class SystemUI implements IXposedHookLoadPackage
 {
   
   private static int id_back = 0;
@@ -28,42 +25,8 @@ public class SystemUI implements IXposedHookLoadPackage, IXposedHookInitPackageR
   private static View btnMenu = null;
   private static Object phoneStatusBar;
   private final static String TAG = "mtc-keys";
-  private final static String SYSTEM_UI_PACKAGE = "com.android.systemui";
   public final static String KEYS_ACTION = "com.mvgv70.mtckeys.action";
-  
-  @Override
-  public void handleInitPackageResources(XC_InitPackageResources.InitPackageResourcesParam resparam) throws Throwable 
-  {
-	  
-	// load resource
-	XC_LayoutInflated loadPackage = new XC_LayoutInflated() {
-			
-	  @Override
-	  public void handleLayoutInflated(LayoutInflatedParam liparam) throws Throwable 
-      {
-	    Log.d(TAG,"handleLayoutInflated");
-	    if (Build.VERSION.SDK_INT > 17)
-	    {
-	      // Android 4.4
-	      id_back = liparam.res.getIdentifier("back", "id", SYSTEM_UI_PACKAGE);
-	      id_home = liparam.res.getIdentifier("home", "id", SYSTEM_UI_PACKAGE);
-	      id_menu = liparam.res.getIdentifier("menu", "id", SYSTEM_UI_PACKAGE);
-	    }
-	    else
-	    {
-	      // Android 4.2
-	      id_back = liparam.res.getIdentifier("status_bar_back", "id", SYSTEM_UI_PACKAGE);
-	      id_home = liparam.res.getIdentifier("status_bar_home", "id", SYSTEM_UI_PACKAGE);
-	      id_menu = liparam.res.getIdentifier("status_bar_menu", "id", SYSTEM_UI_PACKAGE);
-	    }
-      }
-    };
-    
-    if (!resparam.packageName.equals(SYSTEM_UI_PACKAGE)) return;
-	resparam.res.hookLayout(SYSTEM_UI_PACKAGE, "layout", "status_bar", loadPackage);
-    Log.d(TAG,"com.android.systemui resource hook OK");
-  }
- 
+   
   @Override
   public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable 
   {
@@ -73,10 +36,15 @@ public class SystemUI implements IXposedHookLoadPackage, IXposedHookInitPackageR
 	           
       @Override
       protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+    	Service systemUi = (Service)param.thisObject;
         // создать BroadcastReceiver
         IntentFilter li = new IntentFilter(KEYS_ACTION);
-        ((Service)param.thisObject).registerReceiver(actionReceiver,li);
+        systemUi.registerReceiver(actionReceiver,li);
         Log.d(TAG,"action receiver created");
+        // кнопки
+	    id_back = systemUi.getResources().getIdentifier("back", "id", systemUi.getPackageName());
+	    id_home = systemUi.getResources().getIdentifier("home", "id", systemUi.getPackageName());
+	    id_menu = systemUi.getResources().getIdentifier("menu", "id", systemUi.getPackageName());
       }
     };
     
@@ -87,18 +55,20 @@ public class SystemUI implements IXposedHookLoadPackage, IXposedHookInitPackageR
       protected void afterHookedMethod(MethodHookParam param) throws Throwable {
     	Log.d(TAG,"PhoneStatusBar");
     	phoneStatusBar = param.thisObject;
-        Object mStatusBarWindow = XposedHelpers.getObjectField(param.thisObject, "mStatusBarWindow");
+        Object mStatusBarWindow = XposedHelpers.getObjectField(phoneStatusBar, "mStatusBarWindow");
         if (mStatusBarWindow != null)
         {
           // кнопки	
-          btnBack = (View)XposedHelpers.callMethod(mStatusBarWindow, "findViewById", new Object[] {Integer.valueOf(id_back)});
+          btnBack = (View)XposedHelpers.callMethod(mStatusBarWindow, "findViewById", id_back);
           if (btnBack != null) Log.d(TAG,"btnBack.id="+btnBack.getId()); else Log.d(TAG,"btnBack = NULL ("+id_back+")");
-          btnHome = (View)XposedHelpers.callMethod(mStatusBarWindow, "findViewById", new Object[] {Integer.valueOf(id_home)});
+          btnHome = (View)XposedHelpers.callMethod(mStatusBarWindow, "findViewById", id_home);
           if (btnHome != null) Log.d(TAG,"btnHome.id="+btnHome.getId()); else Log.d(TAG,"btnHome = NULL ("+id_home+")");
-          btnMenu = (View)XposedHelpers.callMethod(mStatusBarWindow, "findViewById", new Object[] {Integer.valueOf(id_menu)});
+          btnMenu = (View)XposedHelpers.callMethod(mStatusBarWindow, "findViewById", id_menu);
           if (btnMenu != null) Log.d(TAG,"btnMenu.id="+btnMenu.getId()); else Log.d(TAG,"btnMenu = NULL ("+id_menu+")");
           Log.d(TAG,"PhoneStatusBar: buttons found");
         }
+        else
+          Log.e(TAG,"mStatusBarWindow not found");
       }
     };
         
@@ -116,6 +86,12 @@ public class SystemUI implements IXposedHookLoadPackage, IXposedHookInitPackageR
     {
       String action = intent.getStringExtra("action");
       Log.d(TAG,"action receier: "+action);
+      // выходим, если не определено
+      if (phoneStatusBar == null)
+      {
+    	Log.e(TAG,"phoneStatusBar == null");
+        return;
+      }
       if (action.equalsIgnoreCase("back"))
       {
     	if (btnBack != null)
@@ -133,11 +109,15 @@ public class SystemUI implements IXposedHookLoadPackage, IXposedHookInitPackageR
       }
       else if (action.equalsIgnoreCase("screenshot"))
       {
-    	XposedHelpers.callMethod(phoneStatusBar, "takeScreenshot", new Object[] {});
+    	XposedHelpers.callMethod(phoneStatusBar, "takeScreenshot");
       }
       else if (action.equalsIgnoreCase("apps"))
       {
-        XposedHelpers.callMethod(phoneStatusBar, "toggleRecentApps", new Object[] {});
+        XposedHelpers.callMethod(phoneStatusBar, "toggleRecentApps");
+      }
+      else if (action.equalsIgnoreCase("sleep"))
+      {
+        ((AudioManager)context.getSystemService(Context.AUDIO_SERVICE)).setParameters("ctl_key=power");
       }
       else
         Log.w(TAG,"unknown action "+action);
@@ -146,8 +126,10 @@ public class SystemUI implements IXposedHookLoadPackage, IXposedHookInitPackageR
     // нажатие на кнопку
     private void clickButton(View button)
     {
-      XposedHelpers.callMethod(button, "sendEvent", new Object[] {Integer.valueOf(KeyEvent.ACTION_DOWN), 0});
-      XposedHelpers.callMethod(button, "sendEvent", new Object[] {Integer.valueOf(KeyEvent.ACTION_UP), 0});    	
+      // выходим, если button = NULL
+      if (button == null) return;
+      XposedHelpers.callMethod(button, "sendEvent", KeyEvent.ACTION_DOWN, 0);
+      XposedHelpers.callMethod(button, "sendEvent", KeyEvent.ACTION_UP, 0);    	
     }
   };
   

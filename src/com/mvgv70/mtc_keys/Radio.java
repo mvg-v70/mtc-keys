@@ -91,7 +91,10 @@ public class Radio implements IXposedHookLoadPackage
       String activity = props.getProperty("activity_"+keyCode, "").trim();
       String intentName = props.getProperty("intent_"+keyCode, "").trim();
       String event = props.getProperty("event_"+keyCode, "").trim();
-      if (app.isEmpty() && action.isEmpty() && activity.isEmpty() && intentName.isEmpty() && event.isEmpty())
+      String media = props.getProperty("media_"+keyCode, "").trim();
+      String keyevent = props.getProperty("keyevent_"+keyCode, "").trim();
+      String command = props.getProperty("command_"+keyCode, "").trim();
+      if (app.isEmpty() && action.isEmpty() && activity.isEmpty() && intentName.isEmpty() && event.isEmpty() && media.isEmpty() && keyevent.isEmpty() && command.isEmpty())
         // выполним обработчик по-умолчанию если не заданы никакие действия на клавишу
         radioReceiver.onReceive(context, intent);
     }
