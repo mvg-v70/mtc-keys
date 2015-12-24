@@ -119,6 +119,10 @@ public class SystemUI implements IXposedHookLoadPackage
       {
         ((AudioManager)context.getSystemService(Context.AUDIO_SERVICE)).setParameters("ctl_key=power");
       }
+      else if (action.equalsIgnoreCase("screenoff"))
+      {
+        ((AudioManager)context.getSystemService(Context.AUDIO_SERVICE)).setParameters("ctl_key=screenbrightness");
+      }
       else
         Log.w(TAG,"unknown action "+action);
     }

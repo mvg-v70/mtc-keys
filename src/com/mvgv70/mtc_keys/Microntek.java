@@ -10,6 +10,7 @@ import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
+import android.media.AudioManager;
 import android.os.SystemClock;
 import android.util.Log;
 import android.view.KeyEvent;
@@ -31,6 +32,7 @@ public class Microntek implements IXposedHookLoadPackage
   private static Service mtcService;
   private static Properties props = new Properties();
   private static ActivityManager am;
+  private static AudioManager mcu;
   private static String topActivity;
   private static String nextActivity;
   private final static String EXTERNAL_SD = "/mnt/external_sd";
@@ -48,6 +50,7 @@ public class Microntek implements IXposedHookLoadPackage
     	Log.d(TAG,"onCreate");
       	mContext = (Context)XposedHelpers.getObjectField(param.thisObject, "mContext");
       	am = (ActivityManager)mContext.getSystemService(Context.ACTIVITY_SERVICE);
+      	mcu = ((AudioManager)mContext.getSystemService(Context.AUDIO_SERVICE));
       	mtcService = ((Service)param.thisObject);
         // показать версию модуля
         try 
@@ -137,6 +140,7 @@ public class Microntek implements IXposedHookLoadPackage
       String media = props.getProperty("media_"+keyCode, "").trim();
       String keyevent = props.getProperty("keyevent_"+keyCode, "").trim();
       String command = props.getProperty("command_"+keyCode, "").trim();
+      String mcucmd = props.getProperty("mcu_"+keyCode, "").trim();
       if (!app.isEmpty())
     	// запуск приложения 
       	runApp(context, app);
@@ -161,6 +165,9 @@ public class Microntek implements IXposedHookLoadPackage
       else if (!command.isEmpty())
         // выполнение команды
         executeCmd(command);
+      else if (!mcucmd.isEmpty())
+        // выполнение команды mcu
+        sendMcuCommand(mcucmd);
       else
         // выполним обработчик по-умолчанию, если на клавишу ничего не назначено
         mtcReceiver.onReceive(context, intent);
@@ -349,6 +356,14 @@ public class Microntek implements IXposedHookLoadPackage
  	{
       Log.e(TAG,e.getMessage());
     }
+  }
+  
+  // посылка команды mcu с помощью AudioManager
+  private void sendMcuCommand(String command)
+  {
+    command = command.replaceAll("->", "=");
+    Log.d(TAG,"am.setParameters("+command+")");
+    mcu.setParameters(command);
   }
   
 };
