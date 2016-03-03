@@ -15,37 +15,37 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.app.Activity;
 
-public class Radio implements IXposedHookLoadPackage 
+public class Movie implements IXposedHookLoadPackage 
 {
 	
-  private static BroadcastReceiver radioReceiver;
-  private static Activity mtcRadio;
+  private static BroadcastReceiver movieReceiver;
+  private static Activity mtcMovie;
   private static Properties props = null;
   private final static String TAG = "mtc-keys";
   
   @Override
   public void handleLoadPackage(LoadPackageParam lpparam) throws Throwable 
   {
-    // RadioActivity.onCreate(Bindle)
+    // MediaActivity.onCreate(Bindle)
     XC_MethodHook onCreate = new XC_MethodHook() {
 	           
       @Override
       protected void afterHookedMethod(MethodHookParam param) throws Throwable {
     	Log.d(TAG,"onCreate");
-      	mtcRadio = ((Activity)param.thisObject);
-      	radioReceiver = (BroadcastReceiver)XposedHelpers.getObjectField(param.thisObject, "mtckeyproc");
-      	if (radioReceiver != null)
+      	mtcMovie = ((Activity)param.thisObject);
+      	movieReceiver = (BroadcastReceiver)XposedHelpers.getObjectField(param.thisObject, "mtckeyproc");
+      	if (movieReceiver != null)
       	{
       	  // выключаем receiver
-      	  mtcRadio.unregisterReceiver(radioReceiver);
+      	  mtcMovie.unregisterReceiver(movieReceiver);
       	  // включим его с нулевым набором событий
       	  IntentFilter ni = new IntentFilter();
-    	  mtcRadio.registerReceiver(radioReceiver, ni);
+    	  mtcMovie.registerReceiver(movieReceiver, ni);
       	  // включаем receiver по обработке кнопок
       	  IntentFilter ki = new IntentFilter();
       	  ki.addAction("com.microntek.irkeyUp");
       	  ki.addAction("com.microntek.irkeyDown");
-      	  mtcRadio.registerReceiver(keyRadioReceiver, ki);
+      	  mtcMovie.registerReceiver(keyMovieReceiver, ki);
       	  //
       	  Log.d(TAG,"Radio.Receiver changed");
       	}
@@ -61,27 +61,27 @@ public class Radio implements IXposedHookLoadPackage
       }
     };
     
-    // RadioActivity.onDestroy()
+    // MediaActivity.onDestroy()
     XC_MethodHook onDestroy = new XC_MethodHook() {
 	           
       @Override
       protected void afterHookedMethod(MethodHookParam param) throws Throwable {
         // выключаем receiver
     	Log.d(TAG,"onDestroy");
-    	mtcRadio.unregisterReceiver(keyRadioReceiver);
+    	mtcMovie.unregisterReceiver(keyMovieReceiver);
       }
     };
     
 	// start hooks  
-    if (!lpparam.packageName.equals("com.microntek.radio")) return;
-    Log.d(TAG,"package com.microntek.radio");
-    XposedHelpers.findAndHookMethod("com.microntek.radio.RadioActivity", lpparam.classLoader, "onCreate", Bundle.class, onCreate);
-    XposedHelpers.findAndHookMethod("com.microntek.radio.RadioActivity", lpparam.classLoader, "onDestroy", onDestroy);
-    Log.d(TAG,"com.microntek.radio hook OK");
+    if (!lpparam.packageName.equals("com.microntek.media")) return;
+    Log.d(TAG,"package com.microntek.music");
+    XposedHelpers.findAndHookMethod("com.microntek.media.MediaActivity", lpparam.classLoader, "onCreate", Bundle.class, onCreate);
+    XposedHelpers.findAndHookMethod("com.microntek.media.MediaActivity", lpparam.classLoader, "onDestroy", onDestroy);
+    Log.d(TAG,"com.microntek.media hook OK");
   }
     
   // радио обработчик нажатия
-  private BroadcastReceiver keyRadioReceiver = new BroadcastReceiver()
+  private BroadcastReceiver keyMovieReceiver = new BroadcastReceiver()
   {
 	  
     public void onReceive(Context context, Intent intent)
@@ -102,7 +102,7 @@ public class Radio implements IXposedHookLoadPackage
         buttonPress(context, intent, event);
       else if (app.isEmpty() && action.isEmpty() && activity.isEmpty() && intentName.isEmpty() && media.isEmpty() && keyevent.isEmpty() && command.isEmpty() && mcucmd.isEmpty() && function.isEmpty())
         // выполним обработчик по-умолчанию если не заданы никакие действия на клавишу
-        radioReceiver.onReceive(context, intent);
+        movieReceiver.onReceive(context, intent);
     }
   };
   
@@ -116,13 +116,12 @@ public class Radio implements IXposedHookLoadPackage
       intent.putExtra("keyCode", keyCode);
       // выполним обработчик по-умолчанию
       Log.d(TAG,"emulate event "+keyCode);
-      radioReceiver.onReceive(context, intent);
+      movieReceiver.onReceive(context, intent);
     }
     catch (Exception e)
     {
       Log.d(TAG,"invalid event "+event);
     }
   }
-  
   
 };

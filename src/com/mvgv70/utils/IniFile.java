@@ -1,0 +1,330 @@
+package com.mvgv70.utils;
+
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+
+import android.util.Log;
+
+public class IniFile 
+{
+	
+  HashMap<String,ArrayList<String>> ini_file = new HashMap<String,ArrayList<String>>();
+	
+  public void loadFromFile(String fileName) throws IOException
+  {
+    BufferedReader br;
+    String line;
+    String section = "";
+    // пуста€ секци€
+    ini_file.put("", new ArrayList<String>());
+    br = new BufferedReader(new FileReader(fileName));
+    try 
+    {
+      while ((line = br.readLine()) != null)
+      {
+        // разбираем по строкам
+        if (line.trim().isEmpty())
+        {
+          // пуста€ строка
+        }
+        else if (line.startsWith("#"))
+        {
+          // комментарий
+        }
+        else if (line.startsWith(";"))
+        {
+          // комментарий
+        }
+        else if (line.startsWith("["))
+        {
+          // секци€
+          section = line.substring(1,line.lastIndexOf("]")).trim();
+          ini_file.put(section, new ArrayList<String>());
+        }
+        else
+        {
+          // значение
+          int equalIndex = line.indexOf("=");
+          if (equalIndex > 0)
+          {
+            String key = line.substring(0,equalIndex).trim();
+            String value = line.substring(equalIndex+1).trim();
+            ini_file.get(section).add(key+"="+value);
+         }
+          else
+           ini_file.get(section).add(line);
+        }
+      }
+    }
+    finally
+    {
+      br.close();
+    }
+  }
+  
+  public void clear()
+  {
+    ini_file.clear();
+  }
+  
+  public Iterator<String> enumSections()
+  {
+    return ini_file.keySet().iterator();
+  }
+  
+  public Iterator<String> enumLines(String section)
+  {
+	ArrayList<String> asection = ini_file.get(section);
+	if (asection != null)
+      return ini_file.get(section).iterator();
+	else
+	  return null;
+  }
+  
+  public List<String> getLines(String section)
+  {
+    return ini_file.get(section);
+  }
+  
+  public int linesCount(String section)
+  {
+	ArrayList<String> asection = ini_file.get(section);
+	if (asection != null)
+      return asection.size();
+	else
+	  return 0;
+  }
+  
+  public String getStringKey(String line)
+  {
+	String key;
+    int equalIndex = line.indexOf("=");
+    if (equalIndex > 0)
+      key = line.substring(0,equalIndex).trim();
+    else
+      key = line;
+    return key;
+  }
+  
+  public String getStringValue(String line)
+  {
+    String value = "";
+    int equalIndex = line.indexOf("=");
+    if (equalIndex > 0)
+      value = line.substring(equalIndex+1).trim();
+    return value;
+  }
+  
+  // поиск строкового значени€
+  public String getValue(String section, String key)
+  {
+    String line;
+    ArrayList<String> lines = ini_file.get(section);
+    if (lines != null)
+    {
+      for(int i = 0; i < lines.size(); i++)
+      {
+        line = lines.get(i);
+        if (line.startsWith(key+"="))
+        {
+          int equalIndex = line.indexOf("=");
+          String value = line.substring(equalIndex+1).trim();
+          return value; 
+        }
+      }
+    }
+    return "";
+  }
+  
+  // поиск строкового значени€
+  public String getValue(String section, String key, String defValue)
+  {
+    String line;
+    ArrayList<String> lines = ini_file.get(section);
+    if (lines != null)
+    {
+      // возможно лучше сделать через Iterator
+      for(int i = 0; i < lines.size(); i++)
+      {
+        line = lines.get(i);
+        if (line.startsWith(key+"="))
+        {
+          int equalIndex = line.indexOf("=");
+          String value = line.substring(equalIndex+1).trim();
+          return value; 
+        }
+      }
+    }
+    return defValue;
+  }
+  
+  // поиск целочисленного значени€
+  public int getIntValue(String section, String key, int defValue)
+  {
+    int result = defValue;
+    String value = getValue(section,key);
+    if (!value.isEmpty())
+    {
+      try
+      {
+        result = Integer.decode(value);
+      }
+      catch (Exception E)
+      {
+        result = defValue;
+      }
+    }
+    return result;
+  }
+  
+  // поиск значени€ long
+  public long getLongValue(String section, String key, long defValue)
+  {
+    long result = defValue;
+    String value = getValue(section,key);
+    if (!value.isEmpty())
+    {
+      try
+      {
+        result = Long.decode(value);
+      }
+      catch (Exception E)
+      {
+        result = defValue;
+      }
+    }
+    return result;
+  }
+  
+  // поиск значени€ boolean
+  public boolean getBoolValue(String section, String key, boolean defValue)
+  {
+	boolean result = defValue;
+    String value = getValue(section,key);
+    if (!value.isEmpty())
+    {
+      if ((value.equals("1")) || (value.equalsIgnoreCase("true")))
+        result = true;
+      else if ((value.equals("0")) || (value.equalsIgnoreCase("false")))
+        result = false;
+    }
+    return result;
+  }
+  
+  // поиск значени€ float
+  public float getFloatValue(String section, String key, float defValue)
+  {
+	float result = defValue;
+    String value = getValue(section,key);
+    if (!value.isEmpty())
+    {
+      try
+      {
+        result = Float.valueOf(value);
+      }
+      catch (Exception E)
+      {
+        result = defValue;
+      }
+    }
+    return result;
+  }
+  
+  // установка значени€
+  public void setValue(String section, String key, String value)
+  {
+	String set_line = key+"="+value;
+    ArrayList<String> lines = ini_file.get(section);
+    if (lines == null)
+    {
+      // секции нет
+      ini_file.put(section, new ArrayList<String>());	  
+      ini_file.get(section).add(set_line);
+    }
+	else
+    {
+	  int index = -1;
+	  String line;
+      // секци€ есть
+      for(int i = 0; i < lines.size(); i++)
+      {
+        line = lines.get(i);
+        if (line.startsWith(key+"="))
+        {
+          // нашли ключ
+          index = i;
+          break;
+        }
+      }
+      // ключ существует ?
+      if (index >= 0)
+        lines.set(index,set_line);
+      else
+    	lines.add(set_line);
+    }
+  }
+  
+  // добавление строки
+  public void addLine(String section, String line)
+  {
+	ArrayList<String> lines = ini_file.get(section);
+	if (lines == null)
+	  // секции нет
+	  ini_file.put(section, new ArrayList<String>());	  
+	ini_file.get(section).add(line);
+  }
+  
+  // сохранение в файл, тер€ютс€ комментарии и пустые строки
+  public void saveToFile(String fileName) throws IOException
+  {
+    BufferedWriter bw;
+	bw = new BufferedWriter(new FileWriter(fileName));
+    try 
+    {
+      Iterator<String> sections = enumSections();
+  	  while (sections.hasNext()) 
+  	  {
+  		String line = sections.next();
+  	    bw.write("["+line+"]");
+  	    bw.newLine();
+  	    Iterator<String> lines = enumLines(line);
+  	    while (lines.hasNext()) 
+  		{
+  	      bw.write(lines.next());
+  	      bw.newLine();
+  		}
+  	  }
+    }
+    finally
+    {
+      bw.close();
+    }
+  }
+  
+  // вывод содержимого файла в Log
+  public void LogProps(String TAG)
+  {
+    Iterator<String> sections = enumSections();
+    while (sections.hasNext()) 
+    {
+      String line = sections.next();
+      Log.d(TAG,"["+line+"]");
+      Iterator<String> lines = enumLines(line);
+      while (lines.hasNext()) 
+        Log.d(TAG,lines.next());
+    }
+  }
+  
+  public float getAccuracy()
+  {
+    return 10;
+  }
+
+}

@@ -1,6 +1,7 @@
 package com.mvgv70.mtc_keys;
 
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.util.List;
@@ -11,6 +12,7 @@ import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 import android.media.AudioManager;
+import android.os.Environment;
 import android.os.SystemClock;
 import android.util.Log;
 import android.view.KeyEvent;
@@ -80,7 +82,11 @@ public class Microntek implements IXposedHookLoadPackage
       	  Log.d(TAG,"Manager.Receivers changed");
       	}
       	// чтение настроечного файла
-      	readSettings();
+      	if (Environment.getStorageState(new File(EXTERNAL_SD)).equals(Environment.MEDIA_MOUNTED))
+      	  readSettings();
+      	else
+      	  // прочитаем настройки при подключении external_sd
+      	  createMediaReceiver();
       }
     };
     
@@ -100,6 +106,8 @@ public class Microntek implements IXposedHookLoadPackage
   // чтение настроечного файла
   private void readSettings()
   {
+	props.clear();
+	// mtc-keys.ini
     try
     {
       Log.d(TAG,"inifile load from "+MTC_KEYS_INI);
@@ -141,6 +149,7 @@ public class Microntek implements IXposedHookLoadPackage
       String keyevent = props.getProperty("keyevent_"+keyCode, "").trim();
       String command = props.getProperty("command_"+keyCode, "").trim();
       String mcucmd = props.getProperty("mcu_"+keyCode, "").trim();
+      String function = props.getProperty("function_"+keyCode, "").trim();
       if (!app.isEmpty())
     	// запуск приложения 
       	runApp(context, app);
@@ -168,6 +177,9 @@ public class Microntek implements IXposedHookLoadPackage
       else if (!mcucmd.isEmpty())
         // выполнение команды mcu
         sendMcuCommand(mcucmd);
+      else if (!function.isEmpty())
+        // выполнение функции MicrontekServer
+        callFunction(function);
       else
         // выполним обработчик по-умолчанию, если на клавишу ничего не назначено
         mtcReceiver.onReceive(context, intent);
@@ -313,16 +325,18 @@ public class Microntek implements IXposedHookLoadPackage
   {
     Log.d(TAG,"send media key "+keyCode);
     long eventTime = SystemClock.uptimeMillis();
-
-	Intent downIntent = new Intent(Intent.ACTION_MEDIA_BUTTON, null);
-	KeyEvent downEvent = new KeyEvent(eventTime, eventTime, KeyEvent.ACTION_DOWN, keyCode, 0);
-	downIntent.putExtra(Intent.EXTRA_KEY_EVENT, downEvent);
-	context.sendBroadcast(downIntent);
-
-	Intent upIntent = new Intent(Intent.ACTION_MEDIA_BUTTON, null);
-	KeyEvent upEvent = new KeyEvent(eventTime, eventTime, KeyEvent.ACTION_UP, keyCode, 0);
-	upIntent.putExtra(Intent.EXTRA_KEY_EVENT, upEvent);
-	context.sendBroadcast(upIntent);
+    // down
+    Intent downIntent = new Intent(Intent.ACTION_MEDIA_BUTTON);
+    // KeyEvent downEvent = new KeyEvent(KeyEvent.ACTION_DOWN, keyCode);
+    KeyEvent downEvent = new KeyEvent(eventTime-20, eventTime-20, KeyEvent.ACTION_DOWN, keyCode, 0);
+    downIntent.putExtra(Intent.EXTRA_KEY_EVENT, downEvent);
+    context.sendOrderedBroadcast(downIntent, null);
+    // up
+    Intent upIntent = new Intent(Intent.ACTION_MEDIA_BUTTON);
+    // KeyEvent upEvent = new KeyEvent(KeyEvent.ACTION_UP, keyCode);
+    KeyEvent upEvent = new KeyEvent(eventTime, eventTime, KeyEvent.ACTION_UP, keyCode, 0);
+    upIntent.putExtra(Intent.EXTRA_KEY_EVENT, upEvent);
+    context.sendOrderedBroadcast(upIntent, null);
   }
   
   // выполнение команды с привилегиями root
@@ -366,5 +380,48 @@ public class Microntek implements IXposedHookLoadPackage
     mcu.setParameters(command);
   }
   
+  private void callFunction(String function)
+  {
+    Log.d(TAG,function+"();");
+    try
+    {
+      XposedHelpers.callMethod(mtcService, function);
+    }
+    catch (Error e)
+    {
+      Log.d(TAG,e.getMessage());
+    }
+    catch (Exception e)
+    {
+      Log.d(TAG,e.getMessage());
+    }
+  }
+
+  // включить обработчик подключения носителей
+  private void createMediaReceiver()
+  {
+	IntentFilter ui = new IntentFilter();
+    ui.addAction(Intent.ACTION_MEDIA_MOUNTED);
+    ui.addDataScheme("file");
+    mtcService.registerReceiver(mediaReceiver, ui);
+    Log.d(TAG,"media mount receiver created");
+  }
+  
+  // обработчик MEDIA_MOUNT
+  private BroadcastReceiver mediaReceiver = new BroadcastReceiver()
+  {
+    public void onReceive(Context context, Intent intent)
+    {
+      String action = intent.getAction(); 
+      String drivePath = intent.getData().getPath();
+      Log.d(TAG,"media receiver:"+drivePath+" "+action);
+      if (action.equals(Intent.ACTION_MEDIA_MOUNTED))
+    	// если подключается external_sd
+        if (MTC_KEYS_INI.startsWith(drivePath))
+          // читаем настройки
+          readSettings();
+    }
+  };
+    
 };
 
