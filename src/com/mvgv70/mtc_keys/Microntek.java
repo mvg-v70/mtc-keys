@@ -225,6 +225,8 @@ public class Microntek implements IXposedHookLoadPackage
         context.getPackageManager().getActivityInfo(cn, PackageManager.GET_META_DATA);
         appIntent.setComponent(cn);
         appIntent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED | Intent.FLAG_ACTIVITY_NEW_TASK);
+        // !!!
+        appIntent.putExtra("com.android.settings.FRAGMENT_CLASS", "com.android.settings.MtcAccessibilitySettings");
         Log.d(TAG,appIntent.toString());
         context.startActivity(appIntent);
       } 
