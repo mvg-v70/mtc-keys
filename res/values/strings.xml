@@ -2,7 +2,7 @@
 <resources>
 
     <string name="app_name" translatable="false">mtcKeys</string>
-    <string name="app_description">Remap face keys on microntek devices</string>
-    <string name="app_version_name" translatable="false">2.13</string>
+    <string name="app_desc">Remap face keys on microntek devices</string>
+    <string name="app_version_name" translatable="false">5.2</string>
 
 </resources>
